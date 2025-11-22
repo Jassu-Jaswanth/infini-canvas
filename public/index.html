@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Canvas Drawing Board</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Main Canvas -->
+        <canvas id="drawingCanvas"></canvas>
+        <canvas id="previewCanvas"></canvas>
+        
+        <!-- Tool Wheel -->
+        <div id="toolWheel" class="tool-wheel">
+            <button class="tool-btn" data-tool="pen" title="Pen">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                    <path d="M2 2l7.586 7.586"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="brush" title="Brush">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l6-6"/>
+                    <path d="M15 5l-3.5 3.5"/>
+                    <path d="M20 10c0 6-8 12-14 12c-2 0-3.5-1.5-3.5-3.5c0-1.5 1-2.5 2.5-2.5c3 0 7-5 7-10c0-2.5-1.5-4-3-4"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="eraser" title="Eraser">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 20H9l-6-6 8-8 9 9-4 5z"/>
+                    <line x1="18" y1="12" x2="12" y2="18"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="pan" title="Pan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 9l7-7 7 7"/>
+                    <path d="M5 15l7 7 7-7"/>
+                    <path d="M9 5h6"/>
+                    <path d="M9 19h6"/>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Tool Options Panel -->
+        <div id="toolOptions" class="tool-options">
+            <div class="option-group">
+                <label>Color</label>
+                <input type="color" id="colorPicker" value="#000000">
+                <div id="colorPresets" class="color-presets">
+                    <button class="color-preset" style="background: #000000" data-color="#000000"></button>
+                    <button class="color-preset" style="background: #FF0000" data-color="#FF0000"></button>
+                    <button class="color-preset" style="background: #00FF00" data-color="#00FF00"></button>
+                    <button class="color-preset" style="background: #0000FF" data-color="#0000FF"></button>
+                    <button class="color-preset" style="background: #FFFF00" data-color="#FFFF00"></button>
+                    <button class="color-preset" style="background: #FF00FF" data-color="#FF00FF"></button>
+                    <button class="color-preset" style="background: #00FFFF" data-color="#00FFFF"></button>
+                    <button class="color-preset" style="background: #808080" data-color="#808080"></button>
+                </div>
+            </div>
+            
+            <div class="option-group">
+                <label>Size: <span id="sizeValue">5</span>px</label>
+                <input type="range" id="brushSize" min="1" max="100" value="5">
+            </div>
+            
+            <div class="option-group">
+                <label>Opacity: <span id="opacityValue">100</span>%</label>
+                <input type="range" id="brushOpacity" min="0" max="100" value="100">
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div id="controls" class="controls">
+            <button id="saveBtn" class="control-btn">Save</button>
+            <button id="loadBtn" class="control-btn">Load</button>
+            <button id="clearBtn" class="control-btn">Clear</button>
+            <button id="undoBtn" class="control-btn">Undo</button>
+            <button id="redoBtn" class="control-btn">Redo</button>
+            <label class="auto-save-toggle">
+                <input type="checkbox" id="autoSaveToggle">
+                <span>Auto-save</span>
+            </label>
+        </div>
+        
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar">
+            <span id="connectionStatus">Disconnected</span>
+            <span id="saveStatus"></span>
+            <span id="zoomLevel">100%</span>
+            <span id="coordinates">0, 0</span>
+        </div>
+    </div>
+    
+    <script src="canvas.js"></script>
+</body>
+</html>

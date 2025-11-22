@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Canvas - Standalone Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #f5f5f5; user-select: none; }
+        #app { width: 100vw; height: 100vh; position: relative; }
+        
+        /* Canvas */
+        #drawingCanvas, #previewCanvas { position: absolute; top: 0; left: 0; cursor: crosshair; touch-action: none; }
+        #previewCanvas { pointer-events: none; z-index: 1; }
+        #drawingCanvas { background: white; box-shadow: 0 0 50px rgba(0,0,0,0.1); }
+        
+        /* Tool Wheel - circular radial layout */
+        .tool-wheel { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; border-radius: 50%; padding: 0; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .tool-wheel::before { content: "Tools"; position: absolute; font-size: 12px; color: #555; padding: 4px 8px; border-radius: 999px; background: rgba(0,0,0,0.04); }
+        .tool-btn { position: absolute; width: 48px; height: 48px; border: none; background: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .tool-btn:hover { background: #f0f0f0; transform: translate(-50%, -50%) scale(1.08); }
+        .tool-btn.active { background: #4CAF50; color: white; box-shadow: 0 3px 12px rgba(76, 175, 80, 0.5); }
+        .tool-btn[onclick*="pen"] { top: 12px; left: 50%; transform: translate(-50%, 0); }
+        .tool-btn[onclick*="brush"] { top: 50%; right: 12px; transform: translate(0, -50%); }
+        .tool-btn[onclick*="eraser"] { top: 50%; left: 12px; transform: translate(0, -50%); }
+        .tool-btn[onclick*="pan"] { bottom: 12px; left: 50%; transform: translate(-50%, 0); }
+        
+        /* Tool Options */
+        .tool-options { position: fixed; top: 20px; right: 20px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; }
+        .option-group { margin-bottom: 15px; }
+        .option-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
+        .option-group input[type="range"] { width: 200px; }
+        
+        /* Controls */
+        .controls { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 100; }
+        .control-btn { padding: 10px 20px; background: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .control-btn:hover { background: #f0f0f0; }
+        
+        /* Status */
+        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 8px 20px; display: flex; gap: 30px; font-size: 12px; z-index: 99; }
+        
+        /* Color presets */
+        .color-presets { display: flex; gap: 8px; margin-top: 10px; }
+        .color-preset { width: 30px; height: 30px; border: 2px solid #e0e0e0; border-radius: 50%; cursor: pointer; }
+        .color-preset:hover { transform: scale(1.2); }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <canvas id="drawingCanvas"></canvas>
+        <canvas id="previewCanvas"></canvas>
+        
+        <!-- Tool Wheel -->
+        <div class="tool-wheel">
+            <button class="tool-btn active" onclick="selectTool('pen')">Pen</button>
+            <button class="tool-btn" onclick="selectTool('brush')">Brush</button>
+            <button class="tool-btn" onclick="selectTool('eraser')">Eraser</button>
+            <button class="tool-btn" onclick="selectTool('pan')">Pan</button>
+        </div>
+        
+        <!-- Tool Options -->
+        <div class="tool-options">
+            <div class="option-group">
+                <label>Color</label>
+                <input type="color" id="colorPicker" value="#000000">
+                <div class="color-presets">
+                    <button class="color-preset" style="background:#000000" onclick="setColor('#000000')"></button>
+                    <button class="color-preset" style="background:#FF0000" onclick="setColor('#FF0000')"></button>
+                    <button class="color-preset" style="background:#00FF00" onclick="setColor('#00FF00')"></button>
+                    <button class="color-preset" style="background:#0000FF" onclick="setColor('#0000FF')"></button>
+                    <button class="color-preset" style="background:#FFFF00" onclick="setColor('#FFFF00')"></button>
+                </div>
+            </div>
+            <div class="option-group">
+                <label>Size: <span id="sizeValue">5</span>px</label>
+                <input type="range" id="brushSize" min="1" max="100" value="5" oninput="updateSize(this.value)">
+            </div>
+            <div class="option-group">
+                <label>Opacity: <span id="opacityValue">100</span>%</label>
+                <input type="range" id="brushOpacity" min="0" max="100" value="100" oninput="updateOpacity(this.value)">
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="controls">
+            <button class="control-btn" onclick="saveCanvas()">Save Image</button>
+            <button class="control-btn" onclick="clearCanvas()">Clear</button>
+            <button class="control-btn" onclick="undo()">Undo</button>
+            <button class="control-btn" onclick="redo()">Redo</button>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span>Standalone Mode - No Server Required</span>
+            <span id="status"></span>
+            <span id="zoomLevel">100%</span>
+            <span id="coords">0, 0</span>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('drawingCanvas');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // State
+        let isDrawing = false;
+        let isPanning = false;
+        let currentTool = 'pen';
+        let currentColor = '#000000';
+        let brushSize = 5;
+        let brushOpacity = 1;
+        let viewport = { x: 0, y: 0, scale: 1 };
+        let lastPoint = null;
+        let strokes = [];
+        let currentStroke = null;
+        let redoStack = [];
+
+        // Setup canvas
+        function resizeCanvas() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            canvas.width = width;
+            canvas.height = height;
+            previewCanvas.width = width;
+            previewCanvas.height = height;
+            
+            redraw();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Drawing functions
+        function startDrawing(e) {
+            const point = getPoint(e);
+            
+            if (currentTool === 'pan') {
+                isPanning = true;
+                lastPoint = point;
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+            
+            isDrawing = true;
+            currentStroke = {
+                tool: currentTool,
+                color: currentColor,
+                size: brushSize,
+                opacity: brushOpacity,
+                points: [point]
+            };
+            
+            // For pen/brush, draw on preview canvas while stroking.
+            // For eraser, draw directly on the main canvas so erasing is visible live.
+            const ctxTarget = currentTool === 'eraser' ? ctx : previewCtx;
+            drawPoint(point, ctxTarget);
+        }
+
+        function draw(e) {
+            const point = getPoint(e);
+            document.getElementById('coords').textContent = `${Math.round(point.x)}, ${Math.round(point.y)}`;
+            
+            if (isPanning && lastPoint) {
+                // Use raw coordinates for panning (not scaled)
+                viewport.x += point.rawX - lastPoint.rawX;
+                viewport.y += point.rawY - lastPoint.rawY;
+                lastPoint = point;
+                redraw();
+                return;
+            }
+            
+            if (!isDrawing || !currentStroke) return;
+
+            // Add new point to the stroke
+            currentStroke.points.push(point);
+
+            if (currentTool === 'eraser') {
+                // Draw directly on the main canvas for live erasing
+                const lastStrokePoint = currentStroke.points[currentStroke.points.length - 2];
+                if (lastStrokePoint) {
+                    drawLine(lastStrokePoint, point, ctx);
+                }
+            } else {
+                // For pen/brush, clear preview and redraw the full stroke with pressure
+                previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+                drawStroke(currentStroke, previewCtx);
+            }
+            
+            document.getElementById('status').textContent = `Drawing... (${currentStroke.points.length} points)`;
+        }
+
+        function stopDrawing() {
+            if (isPanning) {
+                isPanning = false;
+                canvas.style.cursor = 'crosshair';
+                return;
+            }
+            
+            if (!isDrawing || !currentStroke) return;
+            
+            isDrawing = false;
+            strokes.push(currentStroke);
+            redoStack = [];
+            
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            redraw();
+            
+            currentStroke = null;
+            document.getElementById('status').textContent = `${strokes.length} strokes`;
+        }
+
+        function getPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            // Check if it's a touch event
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // Use raw hardware pressure when available (0.0 - 1.0 float)
+            let rawPressure = 0;
+            if (typeof e.pressure === 'number') {
+                rawPressure = e.pressure;
+            }
+
+            // Effective pressure for stroke width (keep tiny minimum so strokes are visible)
+            let pressure = rawPressure;
+            if (pressure === 0 && (e.buttons || (e.touches && e.touches.length))) {
+                pressure = 0.05;
+            }
+            
+            return {
+                x: (clientX - rect.left - viewport.x) / viewport.scale,
+                y: (clientY - rect.top - viewport.y) / viewport.scale,
+                pressure: pressure,
+                rawPressure: rawPressure,
+                rawX: clientX - rect.left,  // For panning
+                rawY: clientY - rect.top    // For panning
+            };
+        }
+
+        function drawPoint(point, context) {
+            context.save();
+            context.translate(viewport.x, viewport.y);
+            context.scale(viewport.scale, viewport.scale);
+            context.globalAlpha = brushOpacity;
+            context.fillStyle = currentTool === 'eraser' ? '#FFFFFF' : currentColor;
+            
+            // Map pressure 0..1 to a width range [minWidth, brushSize]
+            const minWidth = 1;
+            const maxWidth = Math.max(minWidth, brushSize);
+            const width = minWidth + (maxWidth - minWidth) * point.pressure;
+            const radius = width / 2;
+
+            context.beginPath();
+            context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+            context.fill();
+            context.restore();
+        }
+
+        function drawLine(from, to, context) {
+            context.save();
+            context.translate(viewport.x, viewport.y);
+            context.scale(viewport.scale, viewport.scale);
+            context.globalAlpha = brushOpacity;
+            context.strokeStyle = currentTool === 'eraser' ? '#FFFFFF' : currentColor;
+
+            const avgPressure = (from.pressure + to.pressure) / 2;
+            const minWidth = 1;
+            const maxWidth = Math.max(minWidth, brushSize);
+            const width = minWidth + (maxWidth - minWidth) * avgPressure;
+            context.lineWidth = width;
+
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            
+            if (currentTool === 'eraser') {
+                context.globalCompositeOperation = 'destination-out';
+            }
+            
+            context.beginPath();
+            context.moveTo(from.x, from.y);
+            context.lineTo(to.x, to.y);
+            context.stroke();
+            context.restore();
+        }
+
+        function drawStroke(stroke, context) {
+            if (stroke.points.length === 0) return;
+            
+            context.save();
+            context.translate(viewport.x, viewport.y);
+            context.scale(viewport.scale, viewport.scale);
+            context.globalAlpha = stroke.opacity;
+            
+            if (stroke.tool === 'eraser') {
+                context.globalCompositeOperation = 'destination-out';
+            }
+            
+            // Draw each segment with its own pressure
+            for (let i = 0; i < stroke.points.length; i++) {
+                if (i === 0) {
+                    // Draw first point as a circle
+                    const point = stroke.points[i];
+                    context.fillStyle = stroke.tool === 'eraser' ? '#FFFFFF' : stroke.color;
+                    context.beginPath();
+                    context.arc(point.x, point.y, stroke.size * point.pressure / 2, 0, Math.PI * 2);
+                    context.fill();
+                } else {
+                    // Draw line segment with interpolated pressure
+                    const prevPoint = stroke.points[i - 1];
+                    const point = stroke.points[i];
+                    
+                    context.strokeStyle = stroke.tool === 'eraser' ? '#FFFFFF' : stroke.color;
+                    context.lineWidth = stroke.size * ((prevPoint.pressure + point.pressure) / 2);
+                    context.lineCap = 'round';
+                    context.lineJoin = 'round';
+                    
+                    context.beginPath();
+                    context.moveTo(prevPoint.x, prevPoint.y);
+                    context.lineTo(point.x, point.y);
+                    context.stroke();
+                }
+            }
+            
+            context.restore();
+        }
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            strokes.forEach(stroke => drawStroke(stroke, ctx));
+        }
+
+        // Event listeners
+        canvas.addEventListener('pointerdown', startDrawing);
+        canvas.addEventListener('pointermove', draw);
+        canvas.addEventListener('pointerup', stopDrawing);
+        canvas.addEventListener('pointercancel', stopDrawing);
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Touch support
+        canvas.addEventListener('touchstart', e => { e.preventDefault(); startDrawing(e); });
+        canvas.addEventListener('touchmove', e => { e.preventDefault(); draw(e); });
+        canvas.addEventListener('touchend', e => { e.preventDefault(); stopDrawing(); });
+
+        // Wheel zoom
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            
+            const point = getPoint(e);
+            const scaleDelta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = Math.max(0.1, Math.min(10, viewport.scale * scaleDelta));
+            
+            // Zoom towards mouse position
+            const scaleChange = newScale / viewport.scale;
+            viewport.x = point.rawX - (point.rawX - viewport.x) * scaleChange;
+            viewport.y = point.rawY - (point.rawY - viewport.y) * scaleChange;
+            viewport.scale = newScale;
+            
+            document.getElementById('zoomLevel').textContent = Math.round(viewport.scale * 100) + '%';
+            redraw();
+        });
+
+        // Tool functions
+        function selectTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+        }
+
+        function setColor(color) {
+            currentColor = color;
+            document.getElementById('colorPicker').value = color;
+        }
+
+        function updateSize(size) {
+            brushSize = parseInt(size);
+            document.getElementById('sizeValue').textContent = size;
+        }
+
+        function updateOpacity(opacity) {
+            brushOpacity = parseInt(opacity) / 100;
+            document.getElementById('opacityValue').textContent = opacity;
+        }
+
+        function clearCanvas() {
+            if (confirm('Clear the entire canvas?')) {
+                strokes = [];
+                redoStack = [];
+                redraw();
+                document.getElementById('status').textContent = 'Canvas cleared';
+            }
+        }
+
+        function undo() {
+            if (strokes.length > 0) {
+                redoStack.push(strokes.pop());
+                redraw();
+                document.getElementById('status').textContent = 'Undone';
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                strokes.push(redoStack.pop());
+                redraw();
+                document.getElementById('status').textContent = 'Redone';
+            }
+        }
+
+        function saveCanvas() {
+            const link = document.createElement('a');
+            link.download = 'canvas-' + Date.now() + '.png';
+            link.href = canvas.toDataURL();
+            link.click();
+            document.getElementById('status').textContent = 'Image saved!';
+        }
+
+        // Color picker
+        document.getElementById('colorPicker').addEventListener('change', e => {
+            currentColor = e.target.value;
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) redo();
+                        else undo();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        saveCanvas();
+                        break;
+                }
+            }
+        });
+
+        // Initial message
+        document.getElementById('status').textContent = 'Ready to draw! Use pen/stylus for pressure sensitivity';
+    </script>
+</body>
+</html>
