@@ -593,6 +593,10 @@ class InfiniteCanvas {
         this.autoSaveEnabled = enabled;
         
         if (enabled) {
+            // Ensure we don't create duplicate intervals
+            if (this.autoSaveInterval) {
+                clearInterval(this.autoSaveInterval);
+            }
             // Auto-save every 30 seconds
             this.autoSaveInterval = setInterval(() => {
                 if (this.hasUnsavedChanges) {
@@ -608,12 +612,196 @@ class InfiniteCanvas {
     }
 }
 
+function setupBoardManager(canvas) {
+    const overlay = document.getElementById('boardManagerOverlay');
+    const boardsBtn = document.getElementById('boardsBtn');
+    const closeBtn = document.getElementById('boardManagerClose');
+    const folderListEl = document.getElementById('folderList');
+    const boardListEl = document.getElementById('boardList');
+    const newFolderInput = document.getElementById('newFolderName');
+    const createFolderBtn = document.getElementById('createFolderBtn');
+    const newBoardInput = document.getElementById('newBoardName');
+    const createBoardBtn = document.getElementById('createBoardBtn');
+
+    if (!overlay || !boardsBtn || !closeBtn || !folderListEl || !boardListEl || !newFolderInput || !createFolderBtn || !newBoardInput || !createBoardBtn) {
+        return;
+    }
+
+    let foldersData = [];
+    let selectedFolderId = null;
+
+    function formatDate(ts) {
+        if (!ts) {
+            return '';
+        }
+        const d = new Date(ts);
+        return d.toLocaleString();
+    }
+
+    function renderFolders() {
+        folderListEl.innerHTML = '';
+        foldersData.forEach(folder => {
+            const li = document.createElement('li');
+            li.className = 'board-manager-list-item' + (folder.id === selectedFolderId ? ' active' : '');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'board-manager-list-item-name';
+            nameSpan.textContent = folder.name;
+            li.appendChild(nameSpan);
+            li.addEventListener('click', () => {
+                selectedFolderId = folder.id;
+                renderFolders();
+                renderBoards();
+            });
+            folderListEl.appendChild(li);
+        });
+    }
+
+    function renderBoards() {
+        boardListEl.innerHTML = '';
+        const folder = foldersData.find(f => f.id === selectedFolderId);
+        if (!folder) {
+            return;
+        }
+        const currentParams = new URLSearchParams(window.location.search);
+        const currentBoardId = currentParams.get('board') || 'default';
+        folder.boards.forEach(board => {
+            const li = document.createElement('li');
+            li.className = 'board-manager-list-item' + (board.id === currentBoardId ? ' active' : '');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'board-manager-list-item-name';
+            nameSpan.textContent = board.name;
+            const metaSpan = document.createElement('span');
+            metaSpan.className = 'board-manager-list-item-meta';
+            metaSpan.textContent = formatDate(board.lastModified);
+            li.appendChild(nameSpan);
+            li.appendChild(metaSpan);
+            li.addEventListener('click', () => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('board', board.id);
+                window.location.href = url.toString();
+            });
+            boardListEl.appendChild(li);
+        });
+    }
+
+    function setOverlayOpen(open) {
+        if (open) {
+            overlay.classList.add('open');
+        } else {
+            overlay.classList.remove('open');
+        }
+    }
+
+    async function loadFolders() {
+        try {
+            const res = await fetch('/api/folders');
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                return;
+            }
+            foldersData = data;
+            const currentParams = new URLSearchParams(window.location.search);
+            const currentBoardId = currentParams.get('board') || 'default';
+
+            // Prefer the folder that contains the currently active board
+            if (currentBoardId) {
+                const containingFolder = foldersData.find(f => Array.isArray(f.boards) && f.boards.some(b => b.id === currentBoardId));
+                if (containingFolder) {
+                    selectedFolderId = containingFolder.id;
+                }
+            }
+
+            // Fallback: first folder
+            if (!selectedFolderId && foldersData.length > 0) {
+                selectedFolderId = foldersData[0].id;
+            }
+            renderFolders();
+            renderBoards();
+        } catch (err) {
+        }
+    }
+
+    async function handleCreateFolder() {
+        const name = newFolderInput.value.trim();
+        if (!name) {
+            return;
+        }
+        try {
+            await fetch('/api/folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            newFolderInput.value = '';
+            await loadFolders();
+        } catch (err) {
+        }
+    }
+
+    async function handleCreateBoard() {
+        if (!selectedFolderId) {
+            return;
+        }
+        const name = newBoardInput.value.trim();
+        if (!name) {
+            return;
+        }
+        try {
+            await fetch('/api/folders/' + encodeURIComponent(selectedFolderId) + '/boards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            newBoardInput.value = '';
+            await loadFolders();
+        } catch (err) {
+        }
+    }
+
+    boardsBtn.addEventListener('click', () => {
+        setOverlayOpen(true);
+        loadFolders();
+    });
+
+    closeBtn.addEventListener('click', () => {
+        setOverlayOpen(false);
+    });
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            setOverlayOpen(false);
+        }
+    });
+
+    createFolderBtn.addEventListener('click', () => {
+        handleCreateFolder();
+    });
+
+    createBoardBtn.addEventListener('click', () => {
+        handleCreateBoard();
+    });
+
+    newFolderInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            handleCreateFolder();
+        }
+    });
+
+    newBoardInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            handleCreateBoard();
+        }
+    });
+}
+
 // Initialize the canvas when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = new InfiniteCanvas();
     
     // Set default tool
     canvas.selectTool('pen');
+
+    setupBoardManager(canvas);
     
     // Warn before leaving if there are unsaved changes
     window.addEventListener('beforeunload', (e) => {

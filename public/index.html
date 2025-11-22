@@ -79,6 +79,7 @@
             <button id="clearBtn" class="control-btn">Clear</button>
             <button id="undoBtn" class="control-btn">Undo</button>
             <button id="redoBtn" class="control-btn">Redo</button>
+            <button id="boardsBtn" class="control-btn">Boards</button>
             <label class="auto-save-toggle">
                 <input type="checkbox" id="autoSaveToggle">
                 <span>Auto-save</span>
@@ -91,6 +92,31 @@
             <span id="saveStatus"></span>
             <span id="zoomLevel">100%</span>
             <span id="coordinates">0, 0</span>
+        </div>
+        
+        <div id="boardManagerOverlay" class="board-manager-overlay">
+            <div class="board-manager-panel">
+                <div class="board-manager-header">
+                    <div class="board-manager-title">Boards</div>
+                    <button id="boardManagerClose" class="board-manager-close">&times;</button>
+                </div>
+                <div class="board-manager-body">
+                    <div class="board-manager-column">
+                        <div class="board-manager-toolbar">
+                            <input id="newFolderName" class="board-manager-input" type="text" placeholder="New folder name">
+                            <button id="createFolderBtn" class="board-manager-small-btn">Create</button>
+                        </div>
+                        <ul id="folderList" class="board-manager-list"></ul>
+                    </div>
+                    <div class="board-manager-column">
+                        <div class="board-manager-toolbar">
+                            <input id="newBoardName" class="board-manager-input" type="text" placeholder="New board name">
+                            <button id="createBoardBtn" class="board-manager-small-btn">Create</button>
+                        </div>
+                        <ul id="boardList" class="board-manager-list"></ul>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

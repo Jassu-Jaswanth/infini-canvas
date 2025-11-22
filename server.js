@@ -6,11 +6,28 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
 // Store canvas data in memory (in production, use a database)
 const canvasBoards = new Map();
+
+// In-memory folder/board metadata
+const folders = new Map();
+
+function slugifyName(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'item';
+}
+
+function generateId(prefix, name) {
+  const slug = slugifyName(name || '');
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${slug}-${rand}`;
+}
 
 // Get or create a canvas board
 function getBoard(boardId) {
@@ -25,6 +42,46 @@ function getBoard(boardId) {
   return canvasBoards.get(boardId);
 }
 
+function ensureDefaultFolderAndBoard() {
+  if (!folders.has('default')) {
+    folders.set('default', {
+      id: 'default',
+      name: 'Default',
+      boards: new Map()
+    });
+  }
+
+  const folder = folders.get('default');
+  if (!folder.boards.size) {
+    const defaultBoardId = 'default';
+    const board = getBoard(defaultBoardId);
+    folder.boards.set(defaultBoardId, {
+      id: defaultBoardId,
+      name: 'Default Board',
+      lastModified: board.lastModified
+    });
+  }
+}
+
+ensureDefaultFolderAndBoard();
+
+function getFoldersSnapshot() {
+  ensureDefaultFolderAndBoard();
+  return Array.from(folders.values()).map(folder => ({
+    id: folder.id,
+    name: folder.name,
+    boards: Array.from(folder.boards.values()).map(boardMeta => {
+      const board = canvasBoards.get(boardMeta.id);
+      const lastModified = board ? board.lastModified : boardMeta.lastModified;
+      return {
+        id: boardMeta.id,
+        name: boardMeta.name,
+        lastModified
+      };
+    })
+  }));
+}
+
 // REST API for saving/loading canvas data
 app.get('/api/board/:id', (req, res) => {
   const board = getBoard(req.params.id);
@@ -36,6 +93,13 @@ app.post('/api/board/:id/save', (req, res) => {
   board.strokes = req.body.strokes || board.strokes;
   board.viewport = req.body.viewport || board.viewport;
   board.lastModified = Date.now();
+
+  folders.forEach(folder => {
+    const meta = folder.boards.get(req.params.id);
+    if (meta) {
+      meta.lastModified = board.lastModified;
+    }
+  });
   
   // Broadcast update to all connected clients
   broadcast(req.params.id, {
@@ -44,6 +108,54 @@ app.post('/api/board/:id/save', (req, res) => {
   });
   
   res.json({ success: true, lastModified: board.lastModified });
+});
+
+// Folder and board metadata APIs
+app.get('/api/folders', (req, res) => {
+  res.json(getFoldersSnapshot());
+});
+
+app.post('/api/folders', (req, res) => {
+  const name = (req.body && typeof req.body.name === 'string' && req.body.name.trim()) || 'Untitled Folder';
+  const folderName = name.trim();
+  const id = generateId('folder', folderName);
+
+  if (!folders.has(id)) {
+    folders.set(id, {
+      id,
+      name: folderName,
+      boards: new Map()
+    });
+  }
+
+  res.status(201).json({
+    id,
+    name: folderName,
+    boards: []
+  });
+});
+
+app.post('/api/folders/:folderId/boards', (req, res) => {
+  ensureDefaultFolderAndBoard();
+  const folder = folders.get(req.params.folderId);
+  if (!folder) {
+    return res.status(404).json({ error: 'Folder not found' });
+  }
+
+  const name = (req.body && typeof req.body.name === 'string' && req.body.name.trim()) || 'Untitled Board';
+  const boardName = name.trim();
+  const boardId = generateId('board', boardName);
+  const board = getBoard(boardId);
+
+  const meta = {
+    id: boardId,
+    name: boardName,
+    lastModified: board.lastModified
+  };
+
+  folder.boards.set(boardId, meta);
+
+  res.status(201).json(meta);
 });
 
 const server = http.createServer(app);
