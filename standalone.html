@@ -4,98 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Infinite Canvas - Standalone Demo</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #f5f5f5; user-select: none; }
-        #app { width: 100vw; height: 100vh; position: relative; }
-        
-        /* Canvas */
-        #drawingCanvas, #previewCanvas { position: absolute; top: 0; left: 0; cursor: crosshair; touch-action: none; }
-        #previewCanvas { pointer-events: none; z-index: 1; }
-        #drawingCanvas { background: white; box-shadow: 0 0 50px rgba(0,0,0,0.1); }
-        
-        /* Tool Wheel - simple bottom bar */
-        .tool-wheel { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; padding: 12px 16px; background: white; border-radius: 999px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; }
-
-        .tool-btn { width: 48px; height: 48px; border: none; background: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-        .tool-btn:hover { background: #f0f0f0; transform: translateY(-1px) scale(1.05); }
-        .tool-btn.active { background: #4CAF50; color: white; box-shadow: 0 3px 12px rgba(76, 175, 80, 0.5); }
-        
-        /* Tool Options */
-        .tool-options { position: fixed; top: 20px; right: 20px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; }
-        .option-group { margin-bottom: 15px; }
-        .option-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
-        .option-group input[type="range"] { width: 200px; }
-        
-        /* Controls */
-        .controls { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 100; }
-        .control-btn { padding: 10px 20px; background: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .control-btn:hover { background: #f0f0f0; }
-        
-        /* Status */
-        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 8px 20px; display: flex; gap: 30px; font-size: 12px; z-index: 99; }
-        
-        /* Color presets */
-        .color-presets { display: flex; gap: 8px; margin-top: 10px; }
-        .color-preset { width: 30px; height: 30px; border: 2px solid #e0e0e0; border-radius: 50%; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease; }
-        .color-preset:hover { transform: scale(1.2); }
-        .color-preset.active { border-color: #4CAF50; transform: scale(1.15); }
-    </style>
+    <link rel="stylesheet" href="public/styles.css">
 </head>
 <body>
     <div id="app">
+        <!-- Main Canvas -->
         <canvas id="drawingCanvas"></canvas>
         <canvas id="previewCanvas"></canvas>
         
-        <!-- Tool Wheel (simple bottom bar) -->
-        <div class="tool-wheel">
-            <button class="tool-btn active" onclick="selectTool('pen')">Pen</button>
-            <button class="tool-btn" onclick="selectTool('brush')">Brush</button>
-            <button class="tool-btn" onclick="selectTool('eraser')">Eraser</button>
-            <button class="tool-btn" onclick="selectTool('pan')">Pan</button>
+        <!-- Tool Wheel -->
+        <div id="toolWheel" class="tool-wheel">
+            <button class="tool-btn" data-tool="pen" title="Pen">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                    <path d="M2 2l7.586 7.586"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="brush" title="Brush">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l6-6"/>
+                    <path d="M15 5l-3.5 3.5"/>
+                    <path d="M20 10c0 6-8 12-14 12c-2 0-3.5-1.5-3.5-3.5c0-1.5 1-2.5 2.5-2.5c3 0 7-5 7-10c0-2.5-1.5-4-3-4"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="eraser" title="Eraser">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 20H9l-6-6 8-8 9 9-4 5z"/>
+                    <line x1="18" y1="12" x2="12" y2="18"/>
+                </svg>
+            </button>
+            <button class="tool-btn" data-tool="pan" title="Pan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 9l7-7 7 7"/>
+                    <path d="M5 15l7 7 7-7"/>
+                    <path d="M9 5h6"/>
+                    <path d="M9 19h6"/>
+                </svg>
+            </button>
         </div>
         
-        <!-- Tool Options -->
-        <div class="tool-options">
+        <!-- Tool Options Panel -->
+        <div id="toolOptions" class="tool-options">
             <div class="option-group">
                 <label>Color</label>
                 <input type="color" id="colorPicker" value="#000000">
-                <div class="color-presets">
-                    <button class="color-preset active" style="background:#000000" data-color="#000000" onclick="setColor('#000000')"></button>
-                    <button class="color-preset" style="background:#FF0000" data-color="#FF0000" onclick="setColor('#FF0000')"></button>
-                    <button class="color-preset" style="background:#00FF00" data-color="#00FF00" onclick="setColor('#00FF00')"></button>
-                    <button class="color-preset" style="background:#0000FF" data-color="#0000FF" onclick="setColor('#0000FF')"></button>
-                    <button class="color-preset" style="background:#FFFF00" data-color="#FFFF00" onclick="setColor('#FFFF00')"></button>
+                <div id="colorPresets" class="color-presets">
+                    <button class="color-preset" style="background: #000000" data-color="#000000"></button>
+                    <button class="color-preset" style="background: #FF0000" data-color="#FF0000"></button>
+                    <button class="color-preset" style="background: #00FF00" data-color="#00FF00"></button>
+                    <button class="color-preset" style="background: #0000FF" data-color="#0000FF"></button>
+                    <button class="color-preset" style="background: #FFFF00" data-color="#FFFF00"></button>
+                    <button class="color-preset" style="background: #FF00FF" data-color="#FF00FF"></button>
+                    <button class="color-preset" style="background: #00FFFF" data-color="#00FFFF"></button>
+                    <button class="color-preset" style="background: #808080" data-color="#808080"></button>
                 </div>
             </div>
+            
             <div class="option-group">
                 <label>Size: <span id="sizeValue">5</span>px</label>
-                <input type="range" id="brushSize" min="1" max="100" value="5" oninput="updateSize(this.value)">
+                <input type="range" id="brushSize" min="1" max="100" value="5">
             </div>
+            
             <div class="option-group">
                 <label>Opacity: <span id="opacityValue">100</span>%</label>
-                <input type="range" id="brushOpacity" min="0" max="100" value="100" oninput="updateOpacity(this.value)">
+                <input type="range" id="brushOpacity" min="0" max="100" value="100">
             </div>
         </div>
         
         <!-- Controls -->
-        <div class="controls">
-            <button class="control-btn" onclick="saveCanvas()">Save Image</button>
-            <button class="control-btn" onclick="clearCanvas()">Clear</button>
-            <button class="control-btn" onclick="undo()">Undo</button>
-            <button class="control-btn" onclick="redo()">Redo</button>
+        <div id="controls" class="controls">
+            <button id="saveBtn" class="control-btn">Save</button>
+            <button id="loadBtn" class="control-btn">Load</button>
+            <button id="clearBtn" class="control-btn">Clear</button>
+            <button id="undoBtn" class="control-btn">Undo</button>
+            <button id="redoBtn" class="control-btn">Redo</button>
+            <label class="auto-save-toggle">
+                <input type="checkbox" id="autoSaveToggle">
+                <span>Auto-save</span>
+            </label>
         </div>
         
         <!-- Status Bar -->
-        <div class="status-bar">
-            <span>Standalone Mode - No Server Required</span>
-            <span id="status"></span>
+        <div id="statusBar" class="status-bar">
+            <span id="connectionStatus">Disconnected</span>
+            <span id="saveStatus"></span>
             <span id="zoomLevel">100%</span>
-            <span id="coords">0, 0</span>
+            <span id="coordinates">0, 0</span>
         </div>
     </div>
-
+    
+    <script src="public/canvas.js"></script>
     <script>
+        if (window.InfiniteCanvas) {
+        } else {
         // Canvas setup
         const canvas = document.getElementById('drawingCanvas');
         const previewCanvas = document.getElementById('previewCanvas');
@@ -171,7 +173,7 @@
 
         function draw(e) {
             const point = getPoint(e);
-            document.getElementById('coords').textContent = `${Math.round(point.x)}, ${Math.round(point.y)}`;
+            document.getElementById('coordinates').textContent = `${Math.round(point.x)}, ${Math.round(point.y)}`;
             
             if (isPanning && lastPoint) {
                 // Use raw coordinates for panning (not scaled)
@@ -199,7 +201,7 @@
                 drawStroke(currentStroke, previewCtx);
             }
             
-            document.getElementById('status').textContent = `Drawing... (${currentStroke.points.length} points)`;
+            document.getElementById('saveStatus').textContent = `Drawing... (${currentStroke.points.length} points)`;
         }
 
         function stopDrawing() {
@@ -219,7 +221,7 @@
             redraw();
             
             currentStroke = null;
-            document.getElementById('status').textContent = `${strokes.length} strokes`;
+            document.getElementById('saveStatus').textContent = `${strokes.length} strokes`;
         }
 
         function getPoint(e) {
@@ -490,7 +492,7 @@
                 strokes = [];
                 redoStack = [];
                 redraw();
-                document.getElementById('status').textContent = 'Canvas cleared';
+                document.getElementById('saveStatus').textContent = 'Canvas cleared';
             }
         }
 
@@ -498,7 +500,7 @@
             if (strokes.length > 0) {
                 redoStack.push(strokes.pop());
                 redraw();
-                document.getElementById('status').textContent = 'Undone';
+                document.getElementById('saveStatus').textContent = 'Undone';
             }
         }
 
@@ -506,7 +508,7 @@
             if (redoStack.length > 0) {
                 strokes.push(redoStack.pop());
                 redraw();
-                document.getElementById('status').textContent = 'Redone';
+                document.getElementById('saveStatus').textContent = 'Redone';
             }
         }
 
@@ -515,7 +517,7 @@
             link.download = 'canvas-' + Date.now() + '.png';
             link.href = canvas.toDataURL();
             link.click();
-            document.getElementById('status').textContent = 'Image saved!';
+            document.getElementById('saveStatus').textContent = 'Image saved!';
         }
 
         // Color picker
@@ -553,7 +555,34 @@
         updateWheelColorSelection(currentColor);
 
         // Initial message
-        document.getElementById('status').textContent = 'Ready to draw! Use pen/stylus for pressure sensitivity';
+        document.getElementById('saveStatus').textContent = 'Ready to draw! Use pen/stylus for pressure sensitivity';
+        }
+    </script>
+    <script>
+        (function() {
+            if (window.location.protocol === 'file:') {
+                if (window.InfiniteCanvas && window.InfiniteCanvas.prototype) {
+                    InfiniteCanvas.prototype.setupWebSocket = function() {
+                        var status = document.getElementById('connectionStatus');
+                        if (status) {
+                            status.textContent = 'Offline (standalone)';
+                            status.className = 'disconnected';
+                        }
+                    };
+                    InfiniteCanvas.prototype.saveToServer = async function() {
+                        var saveStatus = document.getElementById('saveStatus');
+                        if (saveStatus) {
+                            saveStatus.textContent = 'Local-only: no server';
+                            setTimeout(function() { saveStatus.textContent = ''; }, 2000);
+                        }
+                    };
+                    InfiniteCanvas.prototype.loadBoard = async function() {
+                    };
+                    InfiniteCanvas.prototype.toggleAutoSave = function() {
+                    };
+                }
+            }
+        })();
     </script>
 </body>
 </html>
