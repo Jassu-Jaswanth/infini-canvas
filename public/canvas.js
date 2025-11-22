@@ -5,6 +5,8 @@ class InfiniteCanvas {
         this.ctx = this.canvas.getContext('2d');
         this.previewCtx = this.previewCanvas.getContext('2d');
         
+        this.backingScale = 1;
+        
         // Canvas state
         this.viewport = { x: 0, y: 0, scale: 1 };
         this.strokes = [];
@@ -56,18 +58,30 @@ class InfiniteCanvas {
         this.previewCanvas.style.width = width + 'px';
         this.previewCanvas.style.height = height + 'px';
         
-        // Set actual size in pixels (accounting for device pixel ratio)
+        this.updateResolution();
+    }
+
+    updateResolution() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = width * dpr;
-        this.canvas.height = height * dpr;
-        this.previewCanvas.width = width * dpr;
-        this.previewCanvas.height = height * dpr;
         
-        // Scale context to match device pixel ratio
-        this.ctx.scale(dpr, dpr);
-        this.previewCtx.scale(dpr, dpr);
+        const superSample = this.viewport && this.viewport.scale <= 1 ? 2 : 1;
+        const renderScale = dpr * superSample;
         
-        // Redraw
+        const targetW = Math.floor(width * renderScale);
+        const targetH = Math.floor(height * renderScale);
+        if (this.backingScale !== renderScale || this.canvas.width !== targetW || this.canvas.height !== targetH) {
+            this.backingScale = renderScale;
+            this.canvas.width = targetW;
+            this.canvas.height = targetH;
+            this.previewCanvas.width = targetW;
+            this.previewCanvas.height = targetH;
+        }
+        
+        this.ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        this.previewCtx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        
         this.redraw();
     }
     
@@ -129,6 +143,29 @@ class InfiniteCanvas {
             this.toggleAutoSave(e.target.checked);
         });
         
+        const zoomInput = document.getElementById('zoomInput');
+        if (zoomInput) {
+            const applyZoomInput = () => {
+                const val = parseFloat(zoomInput.value);
+                if (!isNaN(val)) {
+                    const clamped = Math.max(10, Math.min(1000, val));
+                    this.setZoom(clamped / 100);
+                }
+            };
+            zoomInput.addEventListener('change', applyZoomInput);
+            zoomInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') applyZoomInput();
+            });
+        }
+        document.querySelectorAll('.zoom-step').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const z = parseFloat(btn.dataset.zoom);
+                if (!isNaN(z)) {
+                    this.setZoom(z / 100);
+                }
+            });
+        });
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey) {
@@ -293,21 +330,33 @@ class InfiniteCanvas {
     
     handleWheel(e) {
         e.preventDefault();
-        
         const scaleDelta = e.deltaY > 0 ? 0.9 : 1.1;
         const newScale = Math.max(0.1, Math.min(10, this.viewport.scale * scaleDelta));
+        const rect = this.canvas.getBoundingClientRect();
+        this.setZoom(newScale, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }
+
+    setZoom(newScale, screenPoint) {
+        const rect = this.canvas.getBoundingClientRect();
+        const Sx = screenPoint && typeof screenPoint.x === 'number' ? screenPoint.x : rect.width / 2;
+        const Sy = screenPoint && typeof screenPoint.y === 'number' ? screenPoint.y : rect.height / 2;
         
-        // Zoom towards mouse position
-        const point = this.getPointFromEvent(e);
-        const dx = point.x - this.viewport.x;
-        const dy = point.y - this.viewport.y;
+        newScale = Math.max(0.1, Math.min(10, newScale));
+        const currentScale = this.viewport.scale || 1;
+        const scaleDelta = newScale / currentScale;
         
-        this.viewport.x -= dx * (scaleDelta - 1);
-        this.viewport.y -= dy * (scaleDelta - 1);
+        
+        this.viewport.x = this.viewport.x + (1 - scaleDelta) * (Sx - this.viewport.x);
+        this.viewport.y = this.viewport.y + (1 - scaleDelta) * (Sy - this.viewport.y);
         this.viewport.scale = newScale;
         
-        document.getElementById('zoomLevel').textContent = Math.round(newScale * 100) + '%';
-        this.redraw();
+        const zl = document.getElementById('zoomLevel');
+        if (zl) zl.textContent = Math.round(newScale * 100) + '%';
+        const zi = document.getElementById('zoomInput');
+        if (zi) zi.value = Math.round(newScale * 100);
+        
+        
+        this.updateResolution();
     }
     
     getPointFromEvent(e) {
@@ -583,6 +632,10 @@ class InfiniteCanvas {
                 this.viewport = board.viewport || { x: 0, y: 0, scale: 1 };
                 this.redraw();
                 document.getElementById('zoomLevel').textContent = Math.round(this.viewport.scale * 100) + '%';
+                const zi = document.getElementById('zoomInput');
+                if (zi) zi.value = Math.round(this.viewport.scale * 100);
+                
+                this.updateResolution();
             }
         } catch (error) {
             console.error('Failed to load board:', error);
