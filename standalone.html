@@ -14,16 +14,12 @@
         #previewCanvas { pointer-events: none; z-index: 1; }
         #drawingCanvas { background: white; box-shadow: 0 0 50px rgba(0,0,0,0.1); }
         
-        /* Tool Wheel - circular radial layout */
-        .tool-wheel { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; border-radius: 50%; padding: 0; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .tool-wheel::before { content: "Tools"; position: absolute; font-size: 12px; color: #555; padding: 4px 8px; border-radius: 999px; background: rgba(0,0,0,0.04); }
-        .tool-btn { position: absolute; width: 48px; height: 48px; border: none; background: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-        .tool-btn:hover { background: #f0f0f0; transform: translate(-50%, -50%) scale(1.08); }
+        /* Tool Wheel - simple bottom bar */
+        .tool-wheel { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; padding: 12px 16px; background: white; border-radius: 999px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; }
+
+        .tool-btn { width: 48px; height: 48px; border: none; background: white; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .tool-btn:hover { background: #f0f0f0; transform: translateY(-1px) scale(1.05); }
         .tool-btn.active { background: #4CAF50; color: white; box-shadow: 0 3px 12px rgba(76, 175, 80, 0.5); }
-        .tool-btn[onclick*="pen"] { top: 12px; left: 50%; transform: translate(-50%, 0); }
-        .tool-btn[onclick*="brush"] { top: 50%; right: 12px; transform: translate(0, -50%); }
-        .tool-btn[onclick*="eraser"] { top: 50%; left: 12px; transform: translate(0, -50%); }
-        .tool-btn[onclick*="pan"] { bottom: 12px; left: 50%; transform: translate(-50%, 0); }
         
         /* Tool Options */
         .tool-options { position: fixed; top: 20px; right: 20px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; }
@@ -41,8 +37,9 @@
         
         /* Color presets */
         .color-presets { display: flex; gap: 8px; margin-top: 10px; }
-        .color-preset { width: 30px; height: 30px; border: 2px solid #e0e0e0; border-radius: 50%; cursor: pointer; }
+        .color-preset { width: 30px; height: 30px; border: 2px solid #e0e0e0; border-radius: 50%; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease; }
         .color-preset:hover { transform: scale(1.2); }
+        .color-preset.active { border-color: #4CAF50; transform: scale(1.15); }
     </style>
 </head>
 <body>
@@ -50,7 +47,7 @@
         <canvas id="drawingCanvas"></canvas>
         <canvas id="previewCanvas"></canvas>
         
-        <!-- Tool Wheel -->
+        <!-- Tool Wheel (simple bottom bar) -->
         <div class="tool-wheel">
             <button class="tool-btn active" onclick="selectTool('pen')">Pen</button>
             <button class="tool-btn" onclick="selectTool('brush')">Brush</button>
@@ -64,11 +61,11 @@
                 <label>Color</label>
                 <input type="color" id="colorPicker" value="#000000">
                 <div class="color-presets">
-                    <button class="color-preset" style="background:#000000" onclick="setColor('#000000')"></button>
-                    <button class="color-preset" style="background:#FF0000" onclick="setColor('#FF0000')"></button>
-                    <button class="color-preset" style="background:#00FF00" onclick="setColor('#00FF00')"></button>
-                    <button class="color-preset" style="background:#0000FF" onclick="setColor('#0000FF')"></button>
-                    <button class="color-preset" style="background:#FFFF00" onclick="setColor('#FFFF00')"></button>
+                    <button class="color-preset active" style="background:#000000" data-color="#000000" onclick="setColor('#000000')"></button>
+                    <button class="color-preset" style="background:#FF0000" data-color="#FF0000" onclick="setColor('#FF0000')"></button>
+                    <button class="color-preset" style="background:#00FF00" data-color="#00FF00" onclick="setColor('#00FF00')"></button>
+                    <button class="color-preset" style="background:#0000FF" data-color="#0000FF" onclick="setColor('#0000FF')"></button>
+                    <button class="color-preset" style="background:#FFFF00" data-color="#FFFF00" onclick="setColor('#FFFF00')"></button>
                 </div>
             </div>
             <div class="option-group">
@@ -118,6 +115,12 @@
         let currentStroke = null;
         let redoStack = [];
 
+        // HUD elements (circular wheel center)
+        const wheelToolLabel = document.getElementById('wheelToolLabel');
+        const wheelSizeLabel = document.getElementById('wheelSizeLabel');
+        const wheelOpacityLabel = document.getElementById('wheelOpacityLabel');
+        const wheelColorDot = document.getElementById('wheelColorDot');
+
         // Setup canvas
         function resizeCanvas() {
             const width = window.innerWidth;
@@ -137,6 +140,12 @@
         // Drawing functions
         function startDrawing(e) {
             const point = getPoint(e);
+            
+            // Alt+click: color picker (eyedropper) regardless of current tool
+            if (e.altKey) {
+                pickColorAtPoint(point);
+                return;
+            }
             
             if (currentTool === 'pan') {
                 isPanning = true;
@@ -239,6 +248,23 @@
                 rawX: clientX - rect.left,  // For panning
                 rawY: clientY - rect.top    // For panning
             };
+        }
+
+        // Color picker: sample canvas pixel color at a given point and apply it
+        function pickColorAtPoint(point) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor(point.rawX * scaleX);
+            const y = Math.floor(point.rawY * scaleY);
+
+            try {
+                const data = ctx.getImageData(x, y, 1, 1).data;
+                const color = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
+                setStrokeColor(color);
+            } catch (err) {
+                // Ignore errors from getImageData outside bounds
+            }
         }
 
         function drawPoint(point, context) {
@@ -366,29 +392,97 @@
             redraw();
         });
 
-        // Tool functions
-        function selectTool(tool) {
-            currentTool = tool;
-            document.querySelectorAll('.tool-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+        // Core tool selection API (UI can call these to change behavior)
+        function usePenTool() {
+            selectToolInternal('pen');
         }
 
-        function setColor(color) {
+        function useBrushTool() {
+            selectToolInternal('brush');
+        }
+
+        function useEraserTool() {
+            selectToolInternal('eraser');
+        }
+
+        function usePanTool() {
+            selectToolInternal('pan');
+        }
+
+        // Internal helper used by all tool selectors
+        function selectToolInternal(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                const label = btn.textContent.trim().toLowerCase();
+                btn.classList.toggle('active', label === tool);
+            });
+            canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+
+            if (wheelToolLabel) {
+                wheelToolLabel.textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
+            }
+        }
+
+        // Existing UI hook for inline onclicks
+        function selectTool(tool) {
+            selectToolInternal(tool);
+        }
+
+        function updateWheelColorSelection(color) {
+            if (wheelColorDot) {
+                wheelColorDot.style.background = color;
+            }
+
+            document.querySelectorAll('.wheel-color').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.color === color);
+            });
+
+            document.querySelectorAll('.color-preset').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === color);
+            });
+        }
+
+        // Core color API
+        function setStrokeColor(color) {
             currentColor = color;
             document.getElementById('colorPicker').value = color;
+            updateWheelColorSelection(color);
+        }
+
+        // Keep old name as a thin wrapper for existing UI
+        function setColor(color) {
+            setStrokeColor(color);
+        }
+
+        function setColorFromWheel(el) {
+            const color = el.dataset.color;
+            setColor(color);
+        }
+
+        // Core size API
+        function setStrokeSize(size) {
+            brushSize = parseInt(size);
+            document.getElementById('sizeValue').textContent = size;
+            if (wheelSizeLabel) {
+                wheelSizeLabel.textContent = `Size ${size}`;
+            }
         }
 
         function updateSize(size) {
-            brushSize = parseInt(size);
-            document.getElementById('sizeValue').textContent = size;
+            setStrokeSize(size);
+        }
+
+        // Core opacity API
+        function setStrokeOpacity(opacityPercent) {
+            brushOpacity = parseInt(opacityPercent) / 100;
+            document.getElementById('opacityValue').textContent = opacityPercent;
+            if (wheelOpacityLabel) {
+                wheelOpacityLabel.textContent = `${opacityPercent}%`;
+            }
         }
 
         function updateOpacity(opacity) {
-            brushOpacity = parseInt(opacity) / 100;
-            document.getElementById('opacityValue').textContent = opacity;
+            setStrokeOpacity(opacity);
         }
 
         function clearCanvas() {
@@ -445,6 +539,18 @@
                 }
             }
         });
+
+        // Initialize wheel HUD to match defaults
+        if (wheelToolLabel) {
+            wheelToolLabel.textContent = 'Pen';
+        }
+        if (wheelSizeLabel) {
+            wheelSizeLabel.textContent = `Size ${brushSize}`;
+        }
+        if (wheelOpacityLabel) {
+            wheelOpacityLabel.textContent = '100%';
+        }
+        updateWheelColorSelection(currentColor);
 
         // Initial message
         document.getElementById('status').textContent = 'Ready to draw! Use pen/stylus for pressure sensitivity';
